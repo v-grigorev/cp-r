@@ -4,7 +4,7 @@ It is a utility for recursively copying files and directories.
 
 # Installation
 
-1. Clone the repository
+Clone the repository
 
 # Build the project
 
