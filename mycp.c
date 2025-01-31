@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 
     inf->full_path_to = inf->to;
 
-	err = pthread_create(&tid, NULL, dir_copy, (void*)inf);
+    err = pthread_create(&tid, NULL, dir_copy, (void*)inf);
     if (err != 0) {
         fprintf(stderr, "main: pthread_create() failed: %s\n", strerror(err));
         free(inf);
