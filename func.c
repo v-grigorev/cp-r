@@ -8,13 +8,16 @@ void* dir_copy(void* arg) {
     int err;
     DIR* dir;
     struct stat dir_stat;
-    for (int i = 0; i < 5; i++) {
-        dir = opendir(inf->from);
-        if (dir != NULL) {
-            break;
-        }
+
+    while ((dir = opendir(inf->from)) == NULL) {
         if (errno == EMFILE) {
-            sleep(1);
+            sleep(5);
+            continue;
+        }
+        else {
+            fprintf(stderr, "fail openning source directory: %s\n", strerror(errno));
+            free(inf);
+            pthread_exit(NULL);
         }
     }
     if (dir == NULL) {
@@ -46,7 +49,6 @@ void* dir_copy(void* arg) {
         snprintf(nw_inf->from, from_size, "%s/%s", inf->from, dirent->d_name);
 
         if (strncmp(inf->full_path_to, nw_inf->from, strlen(inf->full_path_to)) == 0) {
-            
             if (nw_inf->is_new == 1) {
                 continue;
             }
@@ -70,21 +72,31 @@ void* dir_copy(void* arg) {
         }
 
         if (S_ISDIR(dir_stat.st_mode)) {
-            err = pthread_create(&pthreads[pthread_count++], NULL, dir_copy, (void*)nw_inf);
-            if (err != 0) {
-                fprintf(stderr, "thread: pthread_create() failed: %s\n", strerror(err));
-                free(nw_inf->from);
-                free(nw_inf->to);
-                free(nw_inf);
+            while ((err = pthread_create(&pthreads[pthread_count++], NULL, dir_copy, (void*)nw_inf)) != 0) {
+                if (err == EAGAIN) {
+                    sleep(1);
+                    continue;
+                }
+                else {
+                    fprintf(stderr, "thread: pthread_create() failed: %s\n", strerror(err));
+                    free(nw_inf->from);
+                    free(nw_inf->to);
+                    free(nw_inf);
+                }
             }
         }
         else if (S_ISREG(dir_stat.st_mode)) {
-            err = pthread_create(&pthreads[pthread_count++], NULL, file_copy, nw_inf);
-            if (err != 0) {
-                fprintf(stderr, "thread: pthread_create() failed: %s\n", strerror(err));
-                free(nw_inf->from);
-                free(nw_inf->to);
-                free(nw_inf);
+            while ((err = pthread_create(&pthreads[pthread_count++], NULL, file_copy, nw_inf)) != 0) {
+                if (err == EAGAIN) {
+                    sleep(1);
+                    continue;
+                }
+                else {
+                    fprintf(stderr, "thread: pthread_create() failed: %s\n", strerror(err));
+                    free(nw_inf->from);
+                    free(nw_inf->to);
+                    free(nw_inf);
+                }
             }
         }
         else {
@@ -121,26 +133,37 @@ void* dir_copy(void* arg) {
 
 void* file_copy(void* arg) {
     Inf* inf = (Inf*)arg;
+    
     int fd_from;
-
-    fd_from = open(inf->from, O_RDONLY);
-    if (fd_from == -1) {
-        fprintf(stderr, "fail in opening source file '%s': %s\n", inf->from, strerror(errno));
-        free(inf->from);
-        free(inf->to);
-        free(inf);
-        pthread_exit(NULL);
+    while((fd_from = open(inf->from, O_RDONLY)) == -1) {
+        if (errno == EMFILE) {
+            sleep(3);
+            continue;
+        }
+        else {
+            fprintf(stderr, "fail in opening source file '%s': %s\n", inf->from, strerror(errno));
+            free(inf->from);
+            free(inf->to);
+            free(inf);
+            pthread_exit(NULL);
+        }
     }
 
     int fd_to;
-    fd_to = open(inf->to, O_WRONLY | O_CREAT, 0644);
-    if (fd_to == -1) {
-        fprintf(stderr, "fail in opening destination file '%s': %s\n", inf->to, strerror(errno));
-        close(fd_from);
-        free(inf->from);
-        free(inf->to);
-        free(inf);
-        pthread_exit(NULL);
+  
+    while ((fd_to = open(inf->to, O_WRONLY | O_CREAT, 0644)) == -1) {
+        if (errno == EMFILE) {
+            sleep(3);
+            continue;
+        } 
+        else {
+            fprintf(stderr, "fail in opening destination file '%s': %s\n", inf->to, strerror(errno));
+            close(fd_from);
+            free(inf->from);
+            free(inf->to);
+            free(inf);
+            pthread_exit(NULL);
+        }
     }
 
     ssize_t bytes_read;
